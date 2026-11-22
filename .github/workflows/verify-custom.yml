@@ -1,0 +1,40 @@
+name: verify custom build service
+
+on:
+  push:
+    branches:
+      - setup/starling-090-build-service
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - name: Validate fork configuration and version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          versions = json.loads(Path("versions.json").read_text())
+          assert versions["0.9.0"] == "ff303502a4f7982551a0e0d3622d9268efe9e829"
+          wrangler = Path("worker/wrangler.toml").read_text()
+          assert 'REPO = "jssantogit/mod-builds"' in wrangler
+          print("Custom server configuration OK")
+          PY
+      - name: Worker tests
+        working-directory: worker
+        run: |
+          npm ci
+          npm test
+      - name: Python build script tests
+        run: python3 -m unittest discover -s scripts
